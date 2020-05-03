@@ -1,0 +1,279 @@
+---
+title: "Perceived Diversity in the Comic Book Community"
+author: "Emily Jennings-Dobbs"
+date: "4/20/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+***Data cleanup***
+
+```{r}
+#read in data
+library(readxl)
+df <- read_excel("C:\\\\Users\\\\emily\\\\OneDrive\\\\Desktop\\\\temp\\\\Perceived Diversity in the Comic Book Community (Responses).xlsx")
+
+
+head(df)
+```
+```{r}
+
+#turn table into data frame
+library(tidyverse)
+
+df <- as.data.frame(df, stringsAsFactors = TRUE)
+
+#remove timestamp
+df <- df[,-1]
+head(df)
+
+
+#calculate involvement score
+df <- df %>% mutate(involvement_sum = involvement_base + readership + comic_cons + comic_talk + comic_shops + cosplay)
+
+hist(df$involvement_sum, breaks = 40, xlab = "involvement score", main = NULL)
+
+```
+A sum of all involvement scores is used as an overall score of involvement in the comic book community.
+
+```{r}
+#create dataframe without invalid expected age
+alt_df <- df %>% filter(nchar(expected_age)<=2) %>% mutate(expected_age = as.numeric(expected_age))
+head(alt_df)
+
+#remove excess factors
+for(i in 1:51){
+  if(alt_df[i, "gender"]!= "Female" && alt_df[i, "gender"]!= "Male"){
+    alt_df[i, "gender"]="Other"
+  }
+}
+
+for(i in 1:51){
+  if(alt_df[i, "race"]!= "White" && alt_df[i, "race"]!= "Hispanic or Latino"  && alt_df[i, "race"]!= "Black or African American"){
+    alt_df[i, "race"]="Other"
+  }
+}
+
+for(i in 1:51){
+  if(alt_df[i, "expected_race"]!= "White" && alt_df[i, "expected_race"]!= "Hispanic or Latino"  && alt_df[i, "expected_race"]!= "Black or African American"){
+    alt_df[i, "expected_race"]="Other"
+  }
+}
+```
+
+
+
+
+***Graphs ***
+
+
+
+```{r}
+df_factor <- alt_df %>%
+  mutate_if(sapply(alt_df, is.character), as.factor)
+
+
+
+library(cowplot)
+my_plots <- lapply(names(df_factor), function(var_x){
+  p <- 
+    ggplot(df_factor) +
+    aes_string(var_x)
+
+  if(is.numeric(df_factor[[var_x]])) {
+    p <- p + geom_density(color="purple4", fill="lavender")
+
+  } else {
+    p <- p + geom_bar(color="purple4", fill="lavender")  + scale_fill_discrete(drop=TRUE)
+  } 
+})
+
+plot_grid(plotlist = my_plots[1:4])
+plot_grid(plotlist = my_plots[5:10])
+plot_grid(plotlist = my_plots[11:15])
+plot_grid(plotlist = my_plots[16:19])
+plot_grid(plotlist = my_plots[20:29])
+
+```
+***Personality Variables***
+
+```{r}
+personality_df <- df %>% dplyr::select(shy_outgoing, inside_outside, logic_emotion, alonetime_withothers, responsibility, playsafe_risks, imagination, apathetic_empathetic, groupwork_individual, self_discipline)
+
+p_values <- matrix(nrow = ncol(personality_df), ncol = 2)
+
+row.names(p_values) <- colnames(personality_df)
+colnames(p_values) <- c("p_value", "Decision")
+
+for (i in 1:ncol(personality_df)) {
+  y <- t.test(personality_df[,i], mu = 3.5) 
+  p_values[i,1] <- y$p.value
+  
+  if(p_values[i,1] >= .05){
+    p_values[i,2] <- "fail to reject"
+  }else{
+    p_values[i,2] <- "reject"
+  }
+}
+
+knitr::kable(as.data.frame(p_values), "markdown")
+rm(p_values)
+
+```
+
+Only personality traits that are significantly different to the proposed value are playsafe-risks, apathetic-empathetic, and self-discipline. This group believes people in the commic book community to be risk takers, empathetic, and self-disciplined. 
+
+```{r}
+
+library(ggplot2)
+df %>%
+  keep(is.numeric) %>%                     # Keep only numeric columns
+  gather() %>%                             # Convert to key-value pairs
+  ggplot(aes(value)) +                     # Plot the values
+    facet_wrap(~ key, scales = "free") +   # In separate panels
+    geom_density()                         # as density
+```
+
+***Expectation & Acceptance T-tests***
+```{r}
+#50.8% of people are women
+table(df$expected_gender)
+
+```
+54/67 believed the average person in the comic book community was male
+
+```{r}
+binom.test(54,67,p = .492)
+```
+An exact binomial test gives us a p-value of 2.16e-07 which is well below .05, so we reject the NULL hypothesis that people expect about half the population of the comic book community and instead believe men to make up between 69% to 89% of the population.
+
+```{r}
+table(df$expected_race)
+```
+According to cencus data 76.5% of the US population is white.
+```{r}
+binom.test(62,67,p = .765)
+```
+62 out of 67 people think the average person in the comic community is white. This is significantly larger than the proportion of white people in the US. 
+
+
+***Correlational Study***
+
+```{r}
+personality_cor <- cor(df %>% dplyr::select(shy_outgoing, inside_outside, logic_emotion, alonetime_withothers, responsibility, playsafe_risks, imagination, apathetic_empathetic, groupwork_individual, self_discipline))
+  
+
+
+Acceptance_cor <- cor(df %>% dplyr::select(acceptance_men, acceptance_women, acceptance_LGBT, acceptance_POC))
+
+
+
+library(corrplot)
+
+#correlation plot of acceptance questions
+corrplot(Acceptance_cor, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+
+#correlation plot of personality questions
+corrplot(personality_cor, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+```
+
+```{r}
+
+
+numeric_df <- df %>% keep(is.numeric)
+
+
+p_values <- matrix(nrow = ncol(numeric_df), ncol = 3)
+
+row.names(p_values) <- colnames(numeric_df)
+colnames(p_values) <- c("p_value", "Decision", "correlation")
+
+for (i in 1:ncol(numeric_df)) {
+  y <- cor.test(numeric_df[,i] ,df$age, method = "pearson")
+
+  p_values[i,1] <- y$p.value
+  
+  if(p_values[i,1] >= .05){
+    p_values[i,2] <- "fail to reject"
+  }else{
+    p_values[i,2] <- "reject"
+  }
+  
+  p_values[i,3] <- y$estimate
+}
+
+knitr::kable(as.data.frame(p_values), "markdown")
+```
+```{r}
+t.test(df$acceptance_men, df$acceptance_women)
+```
+```{r}
+#better plots
+library(ggpubr)
+
+#demographics vs expectation
+  #age vs expectation (age, race, gender, education)
+  aea <- ggplot(alt_df, aes(age, expected_age)) + geom_point()
+  aer <- ggplot(df, aes(age)) + geom_histogram() + facet_wrap(~expected_race)
+  aeg <- ggplot(df, aes(age)) + geom_histogram() + facet_wrap(~expected_gender)
+  aee <- ggplot(df, aes(age)) + geom_histogram() + facet_wrap(~expected_education)
+  ggarrange(aea, aer, aeg, aee) 
+  
+  #gender vs expectation
+  gea <- ggplot(alt_df, aes(x=expected_age)) + geom_histogram() + facet_wrap(~gender)
+  ger <- ggplot(alt_df, aes(x = gender)) + geom_bar() + facet_wrap(~expected_race)
+  geg <- ggplot(alt_df, aes(gender)) + geom_bar() +facet_wrap(~expected_gender)
+  gee <- ggplot(alt_df, aes(gender)) + geom_bar() +facet_wrap(~expected_education)
+  
+  ggarrange(gea, ger, geg, gee)
+  
+  #education vs expectation
+  eee <- ggplot(df, aes(education)) + geom_bar() +facet_wrap(~expected_education)
+  eer <- ggplot(alt_df, aes(x = education)) + geom_bar() + facet_wrap(~expected_race)
+  eeg <- ggplot(alt_df, aes(education)) + geom_bar() +facet_wrap(~expected_gender)
+  eea <- ggplot(alt_df, aes(x=expected_age)) + geom_histogram() + facet_wrap(~education)
+  
+  ggarrange(eee, eer, eeg, eea)
+  
+#demographics vs Involvement
+
+ig <- ggplot(df, aes(involvement_sum)) + geom_histogram() + facet_wrap(~gender)
+ie <- ggplot(df, aes(involvement_sum)) + geom_histogram() + facet_wrap(~education)
+ir <- ggplot(df, aes(involvement_sum)) + geom_histogram() + facet_wrap(~race)
+
+ggarrange(ig, ie, ir)
+```
+
+```{r}
+#median age is 38.2
+
+t.test(alt_df$expected_age, mu = 38.2)
+```
+```{r}
+alt_df %>% 
+  dplyr::select(gender, involvement_sum,shy_outgoing, inside_outside, logic_emotion, alonetime_withothers, responsibility, playsafe_risks, imagination, apathetic_empathetic, groupwork_individual, self_discipline ) %>%
+  gather(-involvement_sum, -gender, key = "var", value = "value") %>%
+  ggplot(aes(x = value, y = involvement_sum, color = gender)) +
+    geom_point() +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw() +
+    scale_color_manual(values=c("blue4", "darkmagenta", "firebrick3"))
+```
+```{r}
+alt_df %>% 
+  dplyr::select(gender, involvement_sum, age, education, race, acceptance_men, acceptance_women, acceptance_LGBT, acceptance_POC, expected_age, expected_race, expected_gender, expected_education  ) %>%
+  gather(-involvement_sum, -gender, key = "var", value = "value") %>%
+  ggplot(aes(x = value, y = involvement_sum, color = gender)) +
+    geom_point() +
+    facet_wrap(~ var, scales = "free") +
+    theme_bw() +
+    scale_color_manual(values=c("blue4", "darkmagenta", "firebrick3"))
+
+```
